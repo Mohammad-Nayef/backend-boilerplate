@@ -1,7 +1,7 @@
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.repositories.user_repository import UserRepository
 from app.tables.user import UserTable
-from app.dtos.auth import UserRegisterDto, UserLoginDto
+from app.models.auth import UserRegisterDto, UserLoginDto
 from app.core.exceptions import ConflictException, UnauthorizedException
 
 class AuthService:

@@ -1,4 +1,3 @@
-import pytest
 from app.repositories.user_repository import UserRepository
 from app.tables.user import UserTable
 

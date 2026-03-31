@@ -5,7 +5,7 @@ from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.core.constants import Jwt, UserRole
 from app.core.config import settings
 from app.core.utils import running_in_pytest, limiter
-from app.dtos.user import CurrentUserDto
+from app.models.user import CurrentUserDto
 
 def authenticated(roles: set[UserRole] = set(UserRole)):
     def decorator(func):
@@ -55,7 +55,6 @@ def optional_authentication():
             return await func(request, *args, **kwargs)
         return wrapper
     return decorator
-
 
 def rate_limit(value: str):
     def decorator(func):

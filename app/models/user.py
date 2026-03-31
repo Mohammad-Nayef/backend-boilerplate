@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 
 class UserBaseDto(BaseModel):
@@ -10,8 +10,7 @@ class UserResponseDto(UserBaseDto):
     is_active: bool
     created_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CurrentUserDto(UserBaseDto):
     id: int

@@ -6,7 +6,7 @@ from app.services.auth_service import AuthService
 from app.core.exceptions import UnauthorizedException
 from app.core.security import decode_access_token
 import jwt
-from app.dtos.user import CurrentUserDto
+from app.models.user import CurrentUserDto
 from typing import Annotated
 
 # Database dependency

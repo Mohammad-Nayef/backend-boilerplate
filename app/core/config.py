@@ -13,7 +13,7 @@ class Settings:
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = os.getenv("DB_PORT", "5432")
     DB_NAME = os.getenv("DB_NAME", "my_app_db")
-    DB_URL = os.getenv("DB_URL", f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+    DB_URL = os.getenv("DB_URL", f"postgresql+pg8000://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
     DB_POOL_SIZE = int(os.getenv("CONNECTION_POOL_SIZE", 4))
     ISOLATION_LEVEL = os.getenv("ISOLATION_LEVEL", "READ COMMITTED")
 

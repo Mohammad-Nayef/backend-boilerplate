@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from app.core.db import get_db
 
 router = APIRouter(tags=["Health"])
 

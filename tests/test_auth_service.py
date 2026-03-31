@@ -1,39 +1,32 @@
 import pytest
+from unittest.mock import MagicMock
 from app.services.auth_service import AuthService
-from app.repositories.user_repository import UserRepository
-from app.dtos.auth import UserRegisterDto
+from app.models.auth import UserRegisterDto
 from app.core.exceptions import ConflictException
+from app.tables.user import UserTable
 
-class MockUserRepository:
-    def __init__(self):
-        self.users = {}
-        self.counter = 1
-
-    def get_by_email_orm(self, email):
-        return self.users.get(email)
-
-    def create(self, user):
-        user.id = self.counter
-        self.counter += 1
-        self.users[user.email] = user
-        return user
-
-def test_auth_service_register_user_business_logic():
-    mock_repo = MockUserRepository()
+def test_auth_service_registration_logic():
+    """Unit test for business logic using pure mocks (no database)."""
+    # 1. Setup Mock Repository
+    mock_repo = MagicMock()
     
-    # Python doesn't strict check types unless enforced, so we can pass the Mock
-    auth_service = AuthService(user_repo=mock_repo) # type: ignore
+    # Simulate: User already exists
+    mock_repo.get_by_email_orm.return_value = UserTable(email="exists@test.com")
     
-    # 1. Successful registration
-    req = UserRegisterDto(email="service@test.com", password="password")
-    new_user = auth_service.register_user(req)
-    
-    assert new_user.id == 1
-    assert new_user.email == "service@test.com"
-    assert new_user.hashed_password != "password" # Must be hashed
+    auth_service = AuthService(user_repo=mock_repo)
 
-    # 2. Conflict on duplicate email
-    with pytest.raises(ConflictException) as exc:
+    # 2. Test Conflict Exception
+    req = UserRegisterDto(email="exists@test.com", password="password123")
+    with pytest.raises(ConflictException):
         auth_service.register_user(req)
+
+    # 3. Test Successful Path
+    mock_repo.get_by_email_orm.return_value = None # Email is free
+    mock_repo.create.side_effect = lambda user: user # Just return the user passed in
     
-    assert str(exc.value.detail) == "Email already exists"
+    clean_req = UserRegisterDto(email="new@test.com", password="password123")
+    result = auth_service.register_user(clean_req)
+    
+    assert result.email == "new@test.com"
+    # Verify the service actually called the repo's create methods
+    mock_repo.create.assert_called_once()

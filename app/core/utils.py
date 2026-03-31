@@ -12,7 +12,6 @@ from typing import BinaryIO
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from fastapi import Request
-from app.core.config import settings
 from app.core.constants import GUEST_COOKIE_NAME, MAX_RETRIES, RETRY_DELAY_SECONDS
 
 

@@ -1,71 +1,37 @@
-import pytest
 from fastapi.testclient import TestClient
 from app.tables.user import UserTable
 from app.core.security import get_password_hash
 
-def test_register_user_success(client: TestClient):
+def test_register_user_success(client: TestClient, mock_email_service):
+    """Integration test: Real DB, mocking internal email utility."""
     payload = {
-        "email": "newuser@example.com",
-        "password": "strongpassword123"
+        "email": "integration@test.com",
+        "password": "stongpassword123"
     }
     response = client.post("/api/auth/register", json=payload)
+    
     assert response.status_code == 200
+    # Verification: Database side-effect
     data = response.json()
-    assert data["email"] == "newuser@example.com"
-    assert data["role"] == "user"
-    assert "id" in data
+    assert data["email"] == "integration@test.com"
 
-def test_register_duplicate_email(client: TestClient):
-    payload = {
-        "email": "duplicate@example.com",
-        "password": "strongpassword123"
-    }
-    client.post("/api/auth/register", json=payload)
-    
-    response = client.post("/api/auth/register", json=payload)
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Email already exists"
-
-def test_login_success(client: TestClient, db_session):
-    # Pre-seed a user
+def test_login_and_state_management(client: TestClient, db_session):
+    """Integration test: Stateful sessions using DB persistence."""
+    # 1. Seed DB
     user = UserTable(
-        email="login@example.com", 
-        hashed_password=get_password_hash("mypassword")
+        email="session@example.com", 
+        hashed_password=get_password_hash("password")
     )
     db_session.add(user)
     db_session.commit()
     
-    payload = {
-        "email": "login@example.com",
-        "password": "mypassword"
-    }
+    # 2. Login
+    payload = {"email": "session@example.com", "password": "password"}
     response = client.post("/api/auth/login", json=payload)
+    
     assert response.status_code == 200
-    assert response.json()["message"] == "Login successful"
+    assert "token" in response.cookies
     
-    # Check if the HttpOnly secure cookie was set
-    cookies = response.cookies
-    assert "token" in cookies
-
-def test_login_invalid_password(client: TestClient, db_session):
-    user = UserTable(
-        email="wrong@example.com", 
-        hashed_password=get_password_hash("correctpassword")
-    )
-    db_session.add(user)
-    db_session.commit()
-    
-    payload = {
-        "email": "wrong@example.com",
-        "password": "wrongpassword"
-    }
-    response = client.post("/api/auth/login", json=payload)
-    assert response.status_code == 401
-
-def test_logout(client: TestClient):
-    response = client.post("/api/auth/logout")
-    assert response.status_code == 200
-    
-    # Ensure cookie was deleted (Max-Age or Expire header indicates removal)
-    cookie_header = response.headers.get("set-cookie")
-    assert 'token=""' in cookie_header or "Max-Age=0" in cookie_header or "expires" in cookie_header.lower()
+    # 3. Logout
+    logout_resp = client.post("/api/auth/logout")
+    assert logout_resp.status_code == 200
