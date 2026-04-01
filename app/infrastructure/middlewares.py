@@ -9,10 +9,12 @@ from sqlalchemy.exc import OperationalError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from app.core.exceptions import CustomHTTPException
-from app.core.constants import GUEST_COOKIE_NAME, MAX_RETRIES
-from app.core.utils import limiter
-from app.core.config import settings
+from app.common.exceptions import CustomHTTPException
+from app.common.constants import GUEST_COOKIE_NAME, MAX_RETRIES
+from app.common.utils import limiter, get_logger
+from app.common.config import settings
+
+logger = get_logger(__name__)
 
 class HTTPExceptionMiddleware(BaseHTTPMiddleware):
     "Handle exceptions and return a JSON response accordingly"
@@ -22,7 +24,7 @@ class HTTPExceptionMiddleware(BaseHTTPMiddleware):
                 response = await call_next(request)
                 return response
             except OperationalError as ex:
-                logging.error(f"Database connection error: {ex}\n{traceback.format_exc()}")
+                logger.error(f"Database connection error: {ex}\n{traceback.format_exc()}")
                 if retries == MAX_RETRIES - 1:
                     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
             except CustomHTTPException as ex:
@@ -33,7 +35,7 @@ class HTTPExceptionMiddleware(BaseHTTPMiddleware):
                 else:
                     error = "Internal server error"
 
-                logging.error(f"Unhandled exception: {ex}\n{traceback.format_exc()}")
+                logger.error(f"Unhandled exception: {ex}\n{traceback.format_exc()}")
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={"detail": error},
@@ -61,7 +63,7 @@ def setup_rate_limit_middleware(app: FastAPI):
 def add_middlewares(app: FastAPI):
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

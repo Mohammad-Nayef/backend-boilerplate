@@ -1,7 +1,9 @@
+import pytest
 from fastapi.testclient import TestClient
-from app.tables.user import UserTable
-from app.core.security import get_password_hash
+from app.infrastructure.tables.user import UserTable
+from app.infrastructure.security import get_password_hash
 
+@pytest.mark.integration
 def test_register_user_success(client: TestClient, mock_email_service):
     """Integration test: Real DB, mocking internal email utility."""
     payload = {
@@ -15,6 +17,7 @@ def test_register_user_success(client: TestClient, mock_email_service):
     data = response.json()
     assert data["email"] == "integration@test.com"
 
+@pytest.mark.integration
 def test_login_and_state_management(client: TestClient, db_session):
     """Integration test: Stateful sessions using DB persistence."""
     # 1. Seed DB

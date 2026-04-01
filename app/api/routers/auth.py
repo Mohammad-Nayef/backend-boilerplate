@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, Response
-from app.models.auth import UserRegisterDto, UserLoginDto
-from app.models.user import UserResponseDto
+from app.common.models.auth import UserRegister, UserLogin
+from app.common.models.user import UserResponse
 from app.services.auth_service import AuthService
 from app.api.dependencies import get_auth_service
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-@router.post("/register", response_model=UserResponseDto)
+@router.post("/register", response_model=UserResponse)
 def register(
-    payload: UserRegisterDto,
+    payload: UserRegister,
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Register a new user."""
@@ -16,7 +16,7 @@ def register(
 
 @router.post("/login")
 def login(
-    payload: UserLoginDto,
+    payload: UserLogin,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service)
 ):

@@ -1,11 +1,11 @@
 from functools import wraps
 from fastapi import Request
 import jwt
-from app.core.exceptions import ForbiddenException, UnauthorizedException
-from app.core.constants import Jwt, UserRole
-from app.core.config import settings
-from app.core.utils import running_in_pytest, limiter
-from app.models.user import CurrentUserDto
+from app.common.exceptions import ForbiddenException, UnauthorizedException
+from app.common.constants import Jwt, UserRole
+from app.common.config import settings
+from app.common.utils import running_in_pytest, limiter
+from app.common.models.user import CurrentUser
 
 def authenticated(roles: set[UserRole] = set(UserRole)):
     def decorator(func):
@@ -21,7 +21,7 @@ def authenticated(roles: set[UserRole] = set(UserRole)):
                     raise ForbiddenException()
 
                 # Add UserState equivalent to the request
-                request.state.user = CurrentUserDto(
+                request.state.user = CurrentUser(
                     id=int(payload.get(Jwt.Claim.SUB.value, 0)),
                     email=payload.get(Jwt.Claim.EMAIL.value, ""),
                     role=role
@@ -44,7 +44,7 @@ def optional_authentication():
                 )
                 role: str = payload.get(Jwt.Claim.ROLE.value, "")
                 
-                request.state.user = CurrentUserDto(
+                request.state.user = CurrentUser(
                     id=int(payload.get(Jwt.Claim.SUB.value, 0)),
                     email=payload.get(Jwt.Claim.EMAIL.value, ""),
                     role=role

@@ -9,23 +9,27 @@ This project follows a strict **Layered Architecture** to ensure maintainability
 ```mermaid
 graph TD
     API[api/ - Routers] --> Service[services/ - Logic]
-    Service --> Repo[repositories/ - Data Access]
-    Repo --> Table[tables/ - Entities]
+    Service --> Repo[infrastructure/repositories/ - Data Access]
+    Repo --> Table[infrastructure/tables/ - Entities]
     Table <--> DB[(PostgreSQL)]
 
-    API .-> Model[models/ - DTOs]
-    Service .-> Model
+    API .-> Common[common/ - Shared Utils & Models]
+    Service .-> Common
+    Repo .-> Common
 ```
 
 ### Module Responsibilities
 - **`app/api/` (Presentation)**: HTTP routing, request parsing, and response formatting.
   - `dependencies.py`: FastAPI Dependency Injection (get_db, current_user, etc).
   - `decorators.py`: Advanced auth/rate-limiting wrappers.
-- **`app/services/` (Business Logic)**: Orchestrates repositories and contains core domain workflows. Decoupled from HTTP objects.
-- **`app/repositories/` (Data Access)**: Abstraction over database operations. Shields services from SQLAlchemy details.
-- **`app/models/` (Data Transfer Objects)**: Pydantic v2 schemas for API validation and serialization. Suffixed with `Dto`.
-- **`app/tables/` (Database Entities)**: SQLAlchemy Declarative models mapped to relational tables. Suffixed with `Table`.
-- **`app/core/` (Infrastructure)**: Cross-cutting concerns—database connection, security (JWT), exceptions, and generic SQL helpers.
+- **`app/services/` (Business Logic)**: Orchestrates infrastructure calls and contains core domain workflows. Decoupled from HTTP objects.
+- **`app/infrastructure/` (Technical implementation)**: 
+  - `repositories/`: Data Access Layer. Abstraction over database operations.
+  - `tables/`: Database Entities (SQLAlchemy models mapped to relational tables).
+  - `db.py`, `security.py`, `sql_helpers.py`: Persistence and technical cross-cutting concerns.
+- **`app/common/` (Shared Layer)**: 
+  - `models/`: Pydantic v2 schemas for API validation and serialization.
+  - `config.py`, `constants.py`, `exceptions.py`, `utils.py`: Generic utilities and configuration that all other layers can depend on.
 
 ---
 
@@ -67,8 +71,11 @@ $env:PYTHONPATH='.'; uvicorn app.main:app --reload
 
 ### 4. Execute Tests
 ```powershell
-# Run full suite (Automatically handles PostgreSQL Docker container)
-$env:PYTHONPATH='.'; pytest tests/
+# Run unit tests (Mocks only)
+$env:PYTHONPATH='.'; pytest -m unit
+
+# Run integration tests (Uses Testcontainers)
+$env:PYTHONPATH='.'; pytest -m integration
 ```
 
 ### 5. Running with Docker
@@ -82,16 +89,14 @@ docker compose up -d --build
 
 | Module | Level | Dependencies | Upstream Caller |
 | :--- | :--- | :--- | :--- |
-| **Routers** | Presentation | `Service`, `Models`, `Core` | `FastAPI` (HTTP Request) |
-| **Services** | Business | `Repository`, `Models`, `Core` | `Routers` |
-| **Repositories** | Data Access | `Tables`, `Core` | `Services` |
-| **Tables** | Entities | `SQLAlchemy` | `Repositories`, `Services` |
-| **Models** | DTOs | `Pydantic` | `Routers`, `Services` |
-| **Core** | Infrastructure | `SQLAlchemy`, `Passlib`, `JWT` | All Layers |
+| **Routers** | Presentation | `Service`, `Common`, `Infrastructure` | `FastAPI` (HTTP Request) |
+| **Services** | Business | `Infrastructure`, `Common` | `Routers` |
+| **Infrastructure** | Technical | `Tables`, `DB`, `Common` | `Services` |
+| **Common** | Shared | `Pydantic`, `SlowAPI` | All Layers |
 
 ---
 
 ## 🧑‍💻 Coding Conventions
-- **Naming**: Database classes end in `Table`, Pydantic classes end in `Dto`.
+- **Naming**: Database classes end in `Table`, Pydantic classes (Models) have no specific suffix.
 - **Injection**: Always use FastAPI `Depends()` for services and repositories.
-- **Exceptions**: Raise `CustomHTTPException` (from `app.core.exceptions`) in any layer; the middleware converts them to JSON responses automatically.
+- **Exceptions**: Raise `CustomHTTPException` (from `app.common.exceptions`) in any layer; the middleware converts them to JSON responses automatically.

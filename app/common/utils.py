@@ -12,7 +12,8 @@ from typing import BinaryIO
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from fastapi import Request
-from app.core.constants import GUEST_COOKIE_NAME, MAX_RETRIES, RETRY_DELAY_SECONDS
+from app.common.constants import GUEST_COOKIE_NAME, MAX_RETRIES, RETRY_DELAY_SECONDS
+from app.common.config import settings
 
 
 def convert_to_time(value) -> dt_time:
@@ -98,3 +99,19 @@ def get_file_extension(file_name: str) -> str:
 
 def round_to_nearest_hundred(value: int | float):
     return int(round(value / 100.0) * 100)
+
+
+def configure_logging():
+    """Initializes global logging config."""
+    level = logging.DEBUG if settings.DEBUG else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        stream=sys.stdout
+    )
+
+
+def get_logger(name: str):
+    """Returns a logger instance for a given module name."""
+    return logging.getLogger(name)

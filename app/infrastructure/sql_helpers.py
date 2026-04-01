@@ -2,8 +2,8 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from collections.abc import Iterable as ABCIterable
-from app.core.constants import QueryResult
-from app.core.utils import convert_to_time
+from app.common.constants import QueryResult
+from app.common.utils import convert_to_time
 
 def execute_raw_query(db: Session, raw_sql: str, returns: QueryResult = QueryResult.LIST_OF_DICT, **params):
     """

@@ -1,5 +1,7 @@
-from app.tables.user import UserTable
+import pytest
+from app.infrastructure.tables.user import UserTable
 
+@pytest.mark.integration
 def test_independence_part_1(db_session):
     """Insert a specific user in the first test."""
     user = UserTable(
@@ -14,6 +16,7 @@ def test_independence_part_1(db_session):
     found = db_session.query(UserTable).filter_by(email="test_isolation@example.com").first()
     assert found is not None
 
+@pytest.mark.integration
 def test_independence_part_2(db_session):
     """The second test should have a completely clean slate."""
     # This query MUST return None if isolation/rollback is working

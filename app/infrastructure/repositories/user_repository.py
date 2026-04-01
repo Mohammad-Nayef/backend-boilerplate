@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
-from app.tables.user import UserTable
-from app.core.sql_helpers import execute_raw_query, bulk_insert
-from app.core.constants import QueryResult
+from app.infrastructure.tables.user import UserTable
+from app.infrastructure.sql_helpers import execute_raw_query, bulk_insert
+from app.common.constants import QueryResult
 
 class UserRepository:
     def __init__(self, db: Session):

@@ -1,7 +1,7 @@
 import os
 import sys
 # Force VS Code / Pytest to recognize the top-level repo path regardless of where it starts from
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +11,7 @@ from testcontainers.postgres import PostgresContainer
 from unittest.mock import patch
 
 from app.main import app
-from app.core.db import Base, get_db
+from app.infrastructure.db import Base, get_db
 
 @pytest.fixture(scope="session")
 def postgres_engine():
@@ -47,7 +47,7 @@ def db_session(postgres_engine):
 @pytest.fixture(scope="function")
 def mock_email_service():
     """Mocks the core email utility to prevent real network calls during tests."""
-    with patch("app.core.utils.send_email") as mock_mail:
+    with patch("app.common.utils.send_email") as mock_mail:
         yield mock_mail
 
 @pytest.fixture(scope="function")

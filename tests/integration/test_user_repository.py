@@ -1,6 +1,8 @@
-from app.repositories.user_repository import UserRepository
-from app.tables.user import UserTable
+import pytest
+from app.infrastructure.repositories.user_repository import UserRepository
+from app.infrastructure.tables.user import UserTable
 
+@pytest.mark.integration
 def test_create_and_get_user_orm(db_session):
     repo = UserRepository(db_session)
     user = UserTable(email="test@example.com", hashed_password="hashedpassword123", role="admin")
@@ -15,6 +17,7 @@ def test_create_and_get_user_orm(db_session):
     assert fetched_user is not None
     assert fetched_user.role == "admin"
 
+@pytest.mark.integration
 def test_get_by_id_raw(db_session):
     repo = UserRepository(db_session)
     user = UserTable(email="raw@example.com", hashed_password="123", role="user")
@@ -27,6 +30,7 @@ def test_get_by_id_raw(db_session):
     assert raw_user["email"] == "raw@example.com"
     assert raw_user["role"] == "user"
 
+@pytest.mark.integration
 def test_get_all_active_users_raw(db_session):
     repo = UserRepository(db_session)
     user1 = UserTable(email="active1@example.com", hashed_password="123", is_active=True)

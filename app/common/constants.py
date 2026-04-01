@@ -5,11 +5,9 @@ class Environment:
     PRODUCTION = "production"
 
 class UserRole(str, Enum):
-    REGISTERED_STUDENT = "registered_student"
-    MEMBER = "member"
-    FINANCIAL_OFFICER = "financial_officer"
-    LEADER = "leader"
-    DEVELOPER = "developer"
+    ADMIN = "admin"
+    USER = "user"
+    GUEST = "guest"
 
 class Jwt:
     COOKIE_NAME = "token"
