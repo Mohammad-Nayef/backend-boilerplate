@@ -29,7 +29,8 @@ graph TD
   - `db.py`, `security.py`, `sql_helpers.py`: Persistence and technical cross-cutting concerns.
 - **`app/common/` (Shared Layer)**: 
   - `models/`: Pydantic v2 schemas for API validation and serialization.
-  - `config.py`, `constants.py`, `exceptions.py`, `utils.py`: Generic utilities and configuration that all other layers can depend on.
+  - `config.py`: Configuration management using **Pydantic Settings** (env validation, secret management).
+  - `constants.py`, `exceptions.py`, `utils.py`: Generic utilities, logging setup, and error definitions that all other layers can depend on.
 
 ---
 
@@ -48,6 +49,8 @@ The testing suite leverages **Testcontainers** to spin up real PostgreSQL instan
 - **VS Code Ready**: Comprehensive `.vscode/settings.json` and `pytest.ini` ensure tests are discoverable and run immediately from the IDE.
 - **Lifespan Management**: Database initialization is handled via FastAPI `lifespan`, preventing connection errors during background test discovery.
 - **Rate Limiting**: Built-in `SlowAPI` integration with guest-cookie support.
+- **Enhanced Health Checks**: The `/api/health-check` verify both API and Database connectivity.
+- **Structured Logging**: Standardized, timestamped logging for all layers via a central utility.
 
 ---
 

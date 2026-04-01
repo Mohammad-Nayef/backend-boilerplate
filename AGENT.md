@@ -33,9 +33,10 @@ Follow these layering rules strictly:
 ---
 
 ## 🧑‍💻 Coding Conventions
-- **Database Sessions**: Always use the `get_db()` generator from `app/infrastructure/db.py`. Do not manually open/close connections. Use `DbSession` annotation from `app/api/dependencies.py` for repository injections.
-- **Dependency Injection**: Utilize FastAPI's `Depends()` at all levels (Routers -> Services -> Infrastructure/Common).
-- **Validation**: Enforce strict typing via Pydantic. Use `ConfigDict(from_attributes=True)` in response models to allow entity mapping.
+- **Validation**: Enforce strict typing via Pydantic. Use `ConfigDict(from_attributes=True)` in response models.
+- **Roles**: All user role logic should use the `UserRole` enum from `app.common.constants`. Never use hardcoded role strings.
+- **Configuration**: Use `from app.common.config import settings` to access validated environment variables.
+- **Logging**: Use `get_logger(__name__)` from `app.common.utils` for consistent, structured logging across all modules.
 
 ---
 
