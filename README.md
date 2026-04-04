@@ -48,7 +48,9 @@ The testing suite leverages **Testcontainers** to spin up real PostgreSQL instan
 ### 3. Visual & Developer Experience
 - **VS Code Ready**: Comprehensive `.vscode/settings.json` and `pytest.ini` ensure tests are discoverable and run immediately from the IDE.
 - **Lifespan Management**: Database initialization is handled via FastAPI `lifespan`, preventing connection errors during background test discovery.
+- **Built-In Auth Flow**: The boilerplate includes cookie-based JWT auth endpoints for register, login, current-user lookup, and logout.
 - **Rate Limiting**: Built-in `SlowAPI` integration with guest-cookie support.
+- **Protected Route Helpers**: `@authenticated()` and `get_current_user()` share the same token and active-user validation path.
 - **Enhanced Health Checks**: The `/api/health-check` verify both API and Database connectivity.
 - **Structured Logging**: Standardized, timestamped logging for all layers via a central utility.
 
@@ -85,6 +87,12 @@ $env:PYTHONPATH='.'; pytest -m integration
 ```powershell
 docker compose up -d --build
 ```
+
+### Auth Endpoints
+- `POST /api/auth/register` creates a user.
+- `POST /api/auth/login` sets the HTTP-only `token` cookie and is rate limited more tightly than the default guest limit.
+- `GET /api/auth/me` is a protected example endpoint that returns the authenticated user.
+- `POST /api/auth/logout` clears the auth cookie.
 
 ---
 

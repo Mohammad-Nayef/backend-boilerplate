@@ -1,60 +1,90 @@
+import inspect
+from contextlib import contextmanager
 from functools import wraps
+
 from fastapi import Request
-import jwt
-from app.common.exceptions import ForbiddenException, UnauthorizedException
-from app.common.constants import Jwt, UserRole
-from app.common.config import settings
-from app.common.utils import running_in_pytest, limiter
-from app.common.models.user import CurrentUser
 
-def authenticated(roles: set[UserRole] = set(UserRole)):
+from app.api.dependencies import resolve_current_user, resolve_optional_current_user
+from app.common.constants import UserRole
+from app.common.exceptions import ForbiddenException
+from app.common.utils import limiter, running_in_pytest
+from app.infrastructure.db import get_db
+from app.infrastructure.repositories.user_repository import UserRepository
+
+
+def _get_request(
+    func_signature: inspect.Signature,
+    args,
+    kwargs,
+) -> Request:
+    request = func_signature.bind_partial(*args, **kwargs).arguments.get("request")
+    if not isinstance(request, Request):
+        raise RuntimeError(
+            "Decorated route handlers must accept `request: Request`."
+        )
+    return request
+
+
+@contextmanager
+def _request_db_session(request: Request):
+    db_dependency = request.app.dependency_overrides.get(get_db, get_db)
+    db_resource = db_dependency()
+
+    if inspect.isgenerator(db_resource):
+        db = next(db_resource)
+        try:
+            yield db
+        finally:
+            db_resource.close()
+        return
+
+    yield db_resource
+
+
+def authenticated(roles: set[UserRole] | None = None):
     def decorator(func):
+        func_signature = inspect.signature(func)
+        allowed_roles = {role.value for role in roles or set(UserRole)}
+
         @wraps(func)
-        async def wrapper(request: Request, *args, **kwargs):
-            token = request.cookies.get(Jwt.COOKIE_NAME)
-            try:
-                payload = jwt.decode(
-                    token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        async def wrapper(*args, **kwargs):
+            request = _get_request(func_signature, args, kwargs)
+            with _request_db_session(request) as db:
+                current_user = resolve_current_user(
+                    request=request,
+                    user_repo=UserRepository(db),
                 )
-                role: str = payload.get(Jwt.Claim.ROLE.value, "")
-                if role not in roles:
-                    raise ForbiddenException()
+            if current_user.role not in allowed_roles:
+                raise ForbiddenException()
 
-                # Add UserState equivalent to the request
-                request.state.user = CurrentUser(
-                    id=int(payload.get(Jwt.Claim.SUB.value, 0)),
-                    email=payload.get(Jwt.Claim.EMAIL.value, ""),
-                    role=role
-                )
-            except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, TypeError):
-                raise UnauthorizedException()
-
-            return await func(request, *args, **kwargs)
+            result = func(*args, **kwargs)
+            if inspect.isawaitable(result):
+                return await result
+            return result
         return wrapper
     return decorator
+
 
 def optional_authentication():
     def decorator(func):
-        @wraps(func)
-        async def wrapper(request: Request, *args, **kwargs):
-            token = request.cookies.get(Jwt.COOKIE_NAME)
-            try:
-                payload = jwt.decode(
-                    token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-                )
-                role: str = payload.get(Jwt.Claim.ROLE.value, "")
-                
-                request.state.user = CurrentUser(
-                    id=int(payload.get(Jwt.Claim.SUB.value, 0)),
-                    email=payload.get(Jwt.Claim.EMAIL.value, ""),
-                    role=role
-                )
-            except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, TypeError):
-                request.state.user = None
+        func_signature = inspect.signature(func)
 
-            return await func(request, *args, **kwargs)
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            request = _get_request(func_signature, args, kwargs)
+            with _request_db_session(request) as db:
+                resolve_optional_current_user(
+                    request=request,
+                    user_repo=UserRepository(db),
+                )
+
+            result = func(*args, **kwargs)
+            if inspect.isawaitable(result):
+                return await result
+            return result
         return wrapper
     return decorator
+
 
 def rate_limit(value: str):
     def decorator(func):

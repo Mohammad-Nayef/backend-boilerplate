@@ -34,6 +34,7 @@ class AuthService:
             
         access_token = create_access_token(
             subject=user.id,
-            role=user.role
+            role=user.role,
+            email=user.email,
         )
         return access_token
