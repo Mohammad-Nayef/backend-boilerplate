@@ -62,6 +62,12 @@ The testing suite leverages **Testcontainers** to spin up real PostgreSQL instan
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
+pip install -r requirements-dev.txt
+```
+
+For production or deployment builds, install only the runtime dependencies:
+
+```powershell
 pip install -r requirements.txt
 ```
 
@@ -87,6 +93,8 @@ $env:PYTHONPATH='.'; pytest -m integration
 ```powershell
 docker compose up -d --build
 ```
+
+The container installs `requirements.txt` only, so packages from `requirements-dev.txt` are kept out of the deployed image.
 
 ### Auth Endpoints
 - `POST /api/auth/register` creates a user.
