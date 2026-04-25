@@ -1,6 +1,8 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
+
 from app.common.config import settings
+from app.infrastructure.base import Base
 
 engine = create_engine(
     settings.DB_URL,
@@ -14,7 +16,6 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
 
 def get_db():
     """Returns a database session generator for use in FastAPI dependencies."""

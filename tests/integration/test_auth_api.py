@@ -1,75 +1,128 @@
-import pytest
 from fastapi.testclient import TestClient
-from app.infrastructure.tables.user import UserTable
-from app.infrastructure.security import get_password_hash
+import pytest
 
-@pytest.mark.integration
-def test_register_user_success(client: TestClient, mock_email_service):
-    """Integration test: Real DB, mocking internal email utility."""
-    payload = {
-        "email": "integration@test.com",
-        "password": "stongpassword123"
-    }
-    response = client.post("/api/auth/register", json=payload)
-    
-    assert response.status_code == 200
-    # Verification: Database side-effect
-    data = response.json()
-    assert data["email"] == "integration@test.com"
+from tests.integration.conftest import (
+    DEFAULT_TEST_FULL_NAME,
+    DEFAULT_TEST_PASSWORD,
+    extract_code_from_email,
+)
 
-@pytest.mark.integration
-def test_login_and_state_management(client: TestClient, db_session):
-    """Integration test: Stateful sessions using DB persistence."""
-    # 1. Seed DB
-    user = UserTable(
-        email="session@example.com", 
-        hashed_password=get_password_hash("password")
+
+def _register(client: TestClient, email: str):
+    return client.post(
+        "/api/auth/register",
+        json={
+            "full_name": DEFAULT_TEST_FULL_NAME,
+            "email": email,
+            "password": DEFAULT_TEST_PASSWORD,
+        },
     )
-    db_session.add(user)
-    db_session.commit()
-    
-    # 2. Login
-    payload = {"email": "session@example.com", "password": "password"}
-    response = client.post("/api/auth/login", json=payload)
-    
-    assert response.status_code == 200
-    assert "token" in response.cookies
 
-    me_response = client.get("/api/auth/me")
-    assert me_response.status_code == 200
-    assert me_response.json()["email"] == "session@example.com"
-    assert me_response.json()["role"] == "user"
-    
-    # 3. Logout
-    logout_resp = client.post("/api/auth/logout")
-    assert logout_resp.status_code == 200
+
+@pytest.mark.integration
+def test_register_starts_verification_flow(client: TestClient, recording_email_sender):
+    response = _register(client, "integration@example.com")
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["email"] == "integration@example.com"
+    assert body["is_active"] is False
+    assert len(recording_email_sender.sent) == 1
+
+
+@pytest.mark.integration
+def test_login_sets_cookie_and_me_reads_current_user(
+    client: TestClient,
+    recording_email_sender,
+):
+    register = _register(client, "session@example.com")
+    assert register.status_code == 201
+
+    code = extract_code_from_email(recording_email_sender.sent[-1])
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": "session@example.com", "code": code},
+    )
+    assert verify.status_code == 200
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "session@example.com", "password": DEFAULT_TEST_PASSWORD},
+    )
+    assert login.status_code == 200
+    assert "token" in login.cookies
+
+    me = client.get("/api/auth/me")
+    assert me.status_code == 200
+    assert me.json()["email"] == "session@example.com"
+    assert me.json()["full_name"] == DEFAULT_TEST_FULL_NAME
+
+
+@pytest.mark.integration
+def test_logout_clears_cookie(client: TestClient, recording_email_sender):
+    register = _register(client, "logout@example.com")
+    assert register.status_code == 201
+
+    code = extract_code_from_email(recording_email_sender.sent[-1])
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": "logout@example.com", "code": code},
+    )
+    assert verify.status_code == 200
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "logout@example.com", "password": DEFAULT_TEST_PASSWORD},
+    )
+    assert login.status_code == 200
+
+    logout = client.post("/api/auth/logout")
+    assert logout.status_code == 200
 
     after_logout = client.get("/api/auth/me")
     assert after_logout.status_code == 401
 
 
 @pytest.mark.integration
-def test_protected_auth_route_rejects_inactive_users(
-    client: TestClient,
-    db_session,
-):
-    user = UserTable(
-        email="inactive@example.com",
-        hashed_password=get_password_hash("password"),
-    )
-    db_session.add(user)
-    db_session.commit()
+def test_password_reset_two_step_flow(client: TestClient, recording_email_sender):
+    register = _register(client, "reset@example.com")
+    assert register.status_code == 201
 
-    login_response = client.post(
+    verification_code = extract_code_from_email(recording_email_sender.sent[-1])
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": "reset@example.com", "code": verification_code},
+    )
+    assert verify.status_code == 200
+
+    forgot = client.post(
+        "/api/auth/forgot-password",
+        json={"email": "reset@example.com"},
+    )
+    assert forgot.status_code == 200
+
+    reset_code = extract_code_from_email(recording_email_sender.sent[-1])
+    verify_code = client.post(
+        "/api/auth/verify-reset-code",
+        json={"email": "reset@example.com", "code": reset_code},
+    )
+    assert verify_code.status_code == 200
+    reset_token = verify_code.json()["reset_token"]
+
+    reset = client.post(
+        "/api/auth/reset-password",
+        json={"reset_token": reset_token, "new_password": "NewPassword123!"},
+    )
+    assert reset.status_code == 200
+
+    old_login = client.post(
         "/api/auth/login",
-        json={"email": "inactive@example.com", "password": "password"},
+        json={"email": "reset@example.com", "password": DEFAULT_TEST_PASSWORD},
     )
-    assert login_response.status_code == 200
+    assert old_login.status_code == 401
 
-    persisted_user = db_session.query(UserTable).filter_by(email="inactive@example.com").one()
-    persisted_user.is_active = False
-    db_session.commit()
-
-    response = client.get("/api/auth/me")
-
-    assert response.status_code == 401
+    new_login = client.post(
+        "/api/auth/login",
+        json={"email": "reset@example.com", "password": "NewPassword123!"},
+    )
+    assert new_login.status_code == 200

@@ -1,32 +1,39 @@
-import os
 import traceback
-import logging
+
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.exc import OperationalError
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from app.common.exceptions import CustomHTTPException
-from app.common.constants import GUEST_COOKIE_NAME, MAX_RETRIES
-from app.common.utils import limiter, get_logger
+from sqlalchemy.exc import OperationalError
+
 from app.common.config import settings
+from app.common.constants import MAX_RETRIES
+from app.common.exceptions import CustomHTTPException
+from app.common.utils import limiter, get_logger
 
 logger = get_logger(__name__)
 
+
 class HTTPExceptionMiddleware(BaseHTTPMiddleware):
     "Handle exceptions and return a JSON response accordingly"
+
     async def dispatch(self, request: Request, call_next):
         for retries in range(MAX_RETRIES):
             try:
                 response = await call_next(request)
                 return response
             except OperationalError as ex:
-                logger.error(f"Database connection error: {ex}\n{traceback.format_exc()}")
+                logger.error(
+                    f"Database connection error: {ex}\n{traceback.format_exc()}"
+                )
                 if retries == MAX_RETRIES - 1:
-                    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    return JSONResponse(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
             except CustomHTTPException as ex:
                 return JSONResponse(status_code=ex.status_code, content=ex.detail)
             except Exception as ex:
@@ -41,24 +48,12 @@ class HTTPExceptionMiddleware(BaseHTTPMiddleware):
                     content={"detail": error},
                 )
 
-class GuestCookieMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if request.cookies.get(GUEST_COOKIE_NAME) is None:
-            response = await call_next(request)
-            response.set_cookie(
-                GUEST_COOKIE_NAME,
-                os.urandom(16).hex(),
-                httponly=True,
-                samesite="None",
-                secure=True,
-            )
-            return response
-        return await call_next(request)
 
 def setup_rate_limit_middleware(app: FastAPI):
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
+
 
 def add_middlewares(app: FastAPI):
     app.add_middleware(
@@ -69,5 +64,4 @@ def add_middlewares(app: FastAPI):
         allow_headers=["*"],
     )
     app.add_middleware(HTTPExceptionMiddleware)
-    app.add_middleware(GuestCookieMiddleware)
     setup_rate_limit_middleware(app)

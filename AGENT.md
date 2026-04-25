@@ -1,57 +1,35 @@
 # Agent Instructions
 
-This repository is a **FastAPI Backend Boilerplate** with a clean, layered architecture. It serves as a strong foundation for developing scalable RESTful APIs backed by a generic relational database.
+FastAPI backend boilerplate using layered architecture: Routers -> Services -> Repositories -> Tables.
 
-## 🎯 Primary Directives
+## Core Directives
+- **Layers**: Keep routing, business rules, and persistence strictly separated.
+- **Portability**: Use standard SQLAlchemy and generic SQL where possible.
+- **Schema**: Use Alembic for all schema changes (`app/infrastructure/alembic/versions/`).
+- **Docs**: Keep `README.md` and API flow docs in sync with code changes.
 
-- **Database Agnostic Core**: The system is designed for **any** relational database supported by SQLAlchemy. **Never write raw, dialect-specific SQL (like MySQL syntax)** unless absolutely necessary. Rely on standard, generic SQLAlchemy ORM constructs to ensure portability.
-- **Maintain Boilerplate Principles**: Keep features generalized and highly reusable. Avoid over-engineering or introducing hyper-specific domain complexities unless requested. Focus on clean separation and testable layers.
+## Layering Rules
+1. **`app/api/`**: Presentation only (parsing, wiring, formatting). No business logic.
+2. **`app/services/`**: Business workflows, independent from FastAPI request objects.
+3. **`app/infrastructure/`**: Repositories, SQLAlchemy tables, DB/runtime technical concerns.
+4. **`app/common/`**: Shared schemas, constants, config, and utilities.
 
-## 🏗 Architecture & Separation of Concerns
+## Conventions
+- **Validation**: Pydantic v2 for request/response models.
+- **Queries**: No `SELECT *`; enumerate required columns.
+- **Raw SQL helpers**: Use `sql(...)` with explicit `QueryResult` types.
+- **Auth style**: Use HTTP-only cookie token auth for protected routes.
+- **Rate limits**: Prefer composable key strategies for auth endpoints (IP + email/token).
 
-Follow these layering rules strictly:
+## Testing & Verification
+- Use **pytest** markers (`unit`, `integration`, `migration`).
+- Keep integration tests isolated through transaction rollback fixtures.
+- Add tests for all behavior changes, including auth edge cases.
+- Validate Alembic migration upgrades when schema changes are introduced.
 
-1. **`app/api/` (Presentation)**
-   - Responsible for HTTP routing, request parsing, and response formatting.
-   - Depends on `services` and `common`.
-   - Must contain **no** business logic or raw database access.
-
-2. **`app/services/` (Business Logic)**
-   - Core application logic lives here. Orchestrates domain workflows.
-   - Depends on `infrastructure` and `common`.
-   - Must be decoupled from HTTP objects, HTTP exceptions, and database session lifecycles.
-
-3. **`app/infrastructure/` (Technical Implementation)**
-   - **`repositories/`**: The primary abstraction over the database. Handles ORM queries and localized raw SQL.
-   - **`tables/`**: SQLAlchemy Declarative Base entities. Suffixed with `Table`.
-   - **Persistence**: Database engine, session management, and technical helpers.
-
-4. **`app/common/` (Shared Base)**
-   - **`models/`**: Pydantic v2 schemas used for API validation and internal data transfer.
-   - **Cross-cutting**: Generic utilities, configuration (settings), constants, and custom exceptions. All other layers can depend on this.
-
----
-
-## 🧑‍💻 Coding Conventions
-- **Validation**: Enforce strict typing via Pydantic. Use `ConfigDict(from_attributes=True)` in response models.
-- **Roles**: All user role logic should use the `UserRole` enum from `app.common.constants`. Never use hardcoded role strings.
-- **Configuration**: Use `from app.common.config import settings` to access validated environment variables.
-- **Logging**: Use `get_logger(__name__)` from `app.common.utils` for consistent, structured logging across all modules.
-
----
-
-## 🚀 Testing Rules
-This project uses **Testcontainers (PostgreSQL)** for all integration tests.
-- **Global Table Management**: Handled in `tests/integration/conftest.py` via `postgres_engine`. Tables are created once per session.
-- **Transactional Rollbacks**: `db_session` uses transactions and rollbacks after every test function. **Do not use `drop_all()` in individual tests**; rely on the rollback pattern to maintain speed and isolation.
-- **Discovery**: Ensure `tests/__init__.py` exists and `tests/integration/conftest.py` contains the `sys.path` injection to allow VS Code discovery to resolve the `app` module.
-
----
-
-## 🚀 Workflow for Adding Features
-1. **Model**: Define the schema in `app/infrastructure/tables/`.
-2. **Schema**: Define the request/response models in `app/common/models/`.
-3. **Data Access**: Implement DB actions in `app/infrastructure/repositories/`.
-4. **Logic**: Build the domain service in `app/services/`.
-5. **Endpoints**: Expose routes in `app/api/routers/` using dependency injection.
-6. **Registration**: Ensure the router is registered in `app/main.py`.
+## Change Workflow
+1. Update table models and request/response schemas.
+2. Add or update Alembic revisions.
+3. Update repositories, then services, then routers.
+4. Register routers in `app/main.py` and run tests.
+5. Update docs and environment examples when behavior/config changes.

@@ -1,37 +1,51 @@
-import jwt
 from datetime import datetime, timedelta, timezone
-from passlib.context import CryptContext
+import hashlib
+import secrets
 
-from app.common.constants import Jwt
+import jwt
+
 from app.common.config import settings
+from app.common.constants import Jwt
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+def generate_salt() -> str:
+    return secrets.token_hex(32)
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+
+def get_password_hash(password: str, salt: str) -> str:
+    return hashlib.sha256((password + salt).encode("utf-8")).hexdigest()
+
+
+def verify_password(plain_password: str, salt: str, hashed_password: str) -> bool:
+    return get_password_hash(plain_password, salt) == hashed_password
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
 
 def create_access_token(
     subject: str | int,
-    role: str,
-    email: str | None = None,
     expires_delta: timedelta | None = None,
 ) -> str:
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
+    issued_at = datetime.now(timezone.utc)
+    expire = issued_at + (
+        expires_delta or timedelta(days=settings.JWT_ACCESS_TOKEN_EXPIRE_DAYS)
+    )
     to_encode = {
         Jwt.Claim.SUB.value: str(subject),
-        Jwt.Claim.ROLE.value: role,
+        Jwt.Claim.IAT.value: issued_at,
         Jwt.Claim.EXP.value: expire,
     }
-    if email:
-        to_encode[Jwt.Claim.EMAIL.value] = email
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
     return encoded_jwt
 
+
 def decode_access_token(token: str) -> dict:
-    return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    return jwt.decode(
+        token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+    )

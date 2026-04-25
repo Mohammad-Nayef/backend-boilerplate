@@ -1,64 +1,80 @@
 import os
+import re
 import sys
-# Force VS Code / Pytest to recognize the top-level repo path regardless of where it starts from
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from testcontainers.postgres import PostgresContainer
-from unittest.mock import patch
 
-from app.main import app
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, PROJECT_ROOT)
+
+import app.infrastructure.tables  # noqa: F401
+from app.api.dependencies import get_email_sender
 from app.infrastructure.db import Base, get_db
+from app.infrastructure.email import OutboundEmail
+from app.main import app
+
+DEFAULT_TEST_PASSWORD = "Password123!"
+DEFAULT_TEST_FULL_NAME = "Test User"
+CODE_PATTERN = re.compile(r"code:\s*(\d{4})", re.IGNORECASE)
+
+
+class RecordingEmailSender:
+    def __init__(self):
+        self.sent: list[OutboundEmail] = []
+
+    def send(self, email: OutboundEmail) -> None:
+        self.sent.append(email)
+
+
+def extract_code_from_email(email: OutboundEmail) -> str:
+    match = CODE_PATTERN.search(email.text_body)
+    if not match:
+        raise AssertionError(f"Could not find code in email body: {email.text_body}")
+    return match.group(1)
+
 
 @pytest.fixture(scope="session")
 def postgres_engine():
-    """Provides a global Postgres engine initialized via Testcontainers."""
     with PostgresContainer("postgres:15", dbname="test_db") as postgres:
-        db_url = postgres.get_connection_url(driver="pg8000")
-        engine = create_engine(db_url)
-        # Create tables once per session
+        database_url = postgres.get_connection_url(driver="pg8000")
+        engine = create_engine(database_url)
         Base.metadata.create_all(bind=engine)
         yield engine
-        # Drop tables at the end of the test session
-        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+
 
 @pytest.fixture(scope="function")
 def db_session(postgres_engine):
-    """Provides a fresh database session for a test. Rolls back after each test."""
-    # Connect and begin a transaction
     connection = postgres_engine.connect()
     transaction = connection.begin()
-    
-    # Bind the session to the transaction
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
+    TestingSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=connection
+    )
     session = TestingSessionLocal()
-    
+
     try:
         yield session
     finally:
         session.close()
-        # Roll back the transaction to ensure pristine state for the next test
         transaction.rollback()
         connection.close()
 
-@pytest.fixture(scope="function")
-def mock_email_service():
-    """Mocks the core email utility to prevent real network calls during tests."""
-    with patch("app.common.utils.send_email") as mock_mail:
-        yield mock_mail
 
 @pytest.fixture(scope="function")
-def client(db_session):
-    """Provides a TestClient with the DB dependency overridden."""
+def recording_email_sender():
+    return RecordingEmailSender()
+
+
+@pytest.fixture(scope="function")
+def client(db_session, recording_email_sender):
     def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
+        yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_email_sender] = lambda: recording_email_sender
     yield TestClient(app, base_url="https://testserver")
     app.dependency_overrides.clear()

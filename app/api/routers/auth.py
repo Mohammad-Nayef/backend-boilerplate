@@ -1,38 +1,58 @@
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 
 from app.api.decorators import authenticated, rate_limit
-from app.common.models.auth import UserRegister, UserLogin
+from app.api.dependencies import get_auth_service
+from app.common.constants import Jwt, RateLimitKey, RateLimits
+from app.common.models.auth import (
+    ForgotPasswordRequest,
+    LoginResponse,
+    MessageResponse,
+    ResetPasswordRequest,
+    ResetTokenResponse,
+    ResendVerificationCodeRequest,
+    UserLogin,
+    UserRegister,
+    VerifyEmailRequest,
+    VerifyResetCodeRequest,
+)
 from app.common.models.user import CurrentUser, UserResponse
 from app.services.auth_service import AuthService
-from app.api.dependencies import get_auth_service
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-@router.post("/register", response_model=UserResponse)
-def register(
-    payload: UserRegister,
-    auth_service: AuthService = Depends(get_auth_service)
-):
-    """Register a new user."""
-    return auth_service.register_user(payload)
 
-@router.post("/login")
-@rate_limit("5/minute")
+@router.post("/register", response_model=UserResponse, status_code=201)
+@rate_limit(RateLimits.FIVE_PER_MINUTE)
+def register(
+    request: Request,
+    payload: UserRegister,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    user, created = auth_service.register_user(
+        payload, background_tasks=background_tasks
+    )
+    if not created:
+        response.status_code = 200
+    return user
+
+
+@router.post("/login", response_model=LoginResponse)
+@rate_limit(RateLimits.FIVE_PER_MINUTE, keys=[RateLimitKey.IP, RateLimitKey.EMAIL])
 def login(
     request: Request,
     payload: UserLogin,
     response: Response,
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
-    """Authenticate a user and set an HTTP-only cookie."""
-    token = auth_service.login_user(payload)
-    
+    token, _ = auth_service.login_user(payload)
     response.set_cookie(
-        key="token",
+        key=Jwt.COOKIE_NAME,
         value=token,
         httponly=True,
-        samesite="lax", 
-        secure=True, 
+        samesite="none",
+        secure=True,
     )
     return {"message": "Login successful"}
 
@@ -40,17 +60,73 @@ def login(
 @router.get("/me", response_model=CurrentUser)
 @authenticated()
 def get_current_authenticated_user(request: Request):
-    """Return the current authenticated user from the auth cookie."""
     return request.state.user
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=MessageResponse)
 def logout(response: Response):
-    """Clear the authentication cookie."""
     response.delete_cookie(
-        key="token",
+        key=Jwt.COOKIE_NAME,
         httponly=True,
-        samesite="lax",
+        samesite="none",
         secure=True,
     )
-    return {"message": "Logged out successful"}
+    return {"message": "Logged out successfully"}
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+@rate_limit(RateLimits.FIVE_PER_MINUTE, keys=[RateLimitKey.IP, RateLimitKey.EMAIL])
+def verify_email(
+    request: Request,
+    payload: VerifyEmailRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    return auth_service.verify_email(payload)
+
+
+@router.post("/resend-verification-code", response_model=MessageResponse)
+@rate_limit(RateLimits.FIVE_PER_MINUTE, keys=[RateLimitKey.IP, RateLimitKey.EMAIL])
+def resend_verification_code(
+    request: Request,
+    payload: ResendVerificationCodeRequest,
+    background_tasks: BackgroundTasks,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    return auth_service.resend_verification_code(
+        payload,
+        background_tasks=background_tasks,
+    )
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+@rate_limit(RateLimits.FIVE_PER_MINUTE, keys=[RateLimitKey.IP, RateLimitKey.EMAIL])
+def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    return auth_service.forgot_password(payload, background_tasks=background_tasks)
+
+
+@router.post("/verify-reset-code", response_model=ResetTokenResponse)
+@rate_limit(RateLimits.FIVE_PER_MINUTE, keys=[RateLimitKey.IP, RateLimitKey.EMAIL])
+def verify_reset_code(
+    request: Request,
+    payload: VerifyResetCodeRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    return auth_service.verify_reset_code(payload)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+@rate_limit(
+    RateLimits.FIVE_PER_MINUTE,
+    keys=[RateLimitKey.IP, RateLimitKey.RESET_TOKEN],
+)
+def reset_password(
+    request: Request,
+    payload: ResetPasswordRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    return auth_service.reset_password(payload)
